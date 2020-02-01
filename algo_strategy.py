@@ -34,7 +34,6 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.ENEMY_ENCRYPTOR_COUNT = 0;
         self.NEED_ENCRYPTORS = False;
 
-
     def on_turn(self, turn_state):
         """
         This function is called every turn with the game state wrapper as
@@ -51,8 +50,6 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         game_state.submit_turn()
 
-
-
     def starter_strategy(self, game_state):
         
 
@@ -68,12 +65,10 @@ class AlgoStrategy(gamelib.AlgoCore):
         elif self.can_ping(game_state, ping_count, ping_spawn_location_options) and ping_count > 12:
             best_location = self.least_damage_spawn_location(game_state, ping_spawn_location_options)
             game_state.attempt_spawn(PING, best_location, 1000);
-            self.NEED_ENCRYPTORS = False;
         elif not self.can_ping(game_state, ping_count, ping_spawn_location_options):
             if ping_count > 18:     
                 best_location = self.least_damage_spawn_location(game_state, ping_spawn_location_options)
                 game_state.attempt_spawn(EMP, best_location, 1000);
-
 
     def can_ping(self, game_state, ping_count, location_options):
         can_tank = 1+(15 + 3*self.ENCRYPTOR_COUNT)//16;
@@ -110,55 +105,77 @@ class AlgoStrategy(gamelib.AlgoCore):
                 filtered.append(location)
         return filtered
 
+    def nearby_destructor(self,game_state, l, destructor_locations):
+        nearby_locs = [[l[0],l[1]-1], [l[0]-1,l[1]-1] , [l[0]+1,l[1]-1], [l[0]+1,l[1]], [l[0]-1,l[1]]];
+        for i in nearby_locs:
+            if game_state.contains_stationary_unit(i) and i in destructor_locations:
+                return True;
+        return False;
     def build_defences(self, game_state):
         # Useful tool for setting up your base locations: https://www.kevinbai.design/terminal-map-maker
         # More community tools available at: https://terminal.c1games.com/rules#Download
-        encryptor_locations = [[13, 3], [14, 3], [13, 2], [14, 2], [13, 1], [14, 1], [13, 0], [14, 0], [12, 1], [15, 1],[12, 2], [15, 2]]
+        encryptor_locations = [[7, 8], [20, 8], [8, 7], [19, 7], [9, 6], [18, 6], [10, 5], [17, 5], [11, 4], [16, 4], [12, 3], [15, 3], [13, 2], [14, 2]];
+        encryptor_locations = sorted(encryptor_locations, key=lambda x: x[1]);
         
-
         if self.ENCRYPTOR_COUNT==0 and game_state.turn_number > 2:
             k = game_state.attempt_spawn(ENCRYPTOR, encryptor_locations[0]);
-            self.ENCRYPTOR_COUNT += k;
 
-
-        basic_filter_locations = [[5, 11], [6, 11], [21, 11], [22, 11], [6, 9], [21, 9], [7, 8], [20, 8], [8, 7],
-                                  [19, 7], [9, 6], [18, 6], [10, 5], [12, 5], [13, 5], [14, 5], [15, 5], [17, 5],
-                                  [11, 4], [16, 4], [3, 11], [2, 12], [1, 13], [24, 11], [25, 12], [26, 13]]
-
-
-        
-        basic_destructor_locations = [[27, 13], [0, 13]]
+        basic_filter_locations = [[1, 13], [26, 13], [2, 12], [25, 12], [6, 11], [21, 11], [7, 9], [20, 9], [8, 8], [19, 8], [9, 7], [18, 7], [10, 6], [17, 6], [11, 5], [16, 5], [12, 4], [15, 4], [13, 3], [14, 3]];
+        basic_destructor_locations = [[0, 13], [27, 13], [6, 10], [21, 10]];
         game_state.attempt_spawn(DESTRUCTOR, basic_destructor_locations)
-
-        if not game_state.contains_stationary_unit([6,10]):
-            game_state.attempt_spawn(DESTRUCTOR, [5,10]);
-        if not game_state.contains_stationary_unit([21,10]):
-            game_state.attempt_spawn(DESTRUCTOR, [22,10]);
-        
         game_state.attempt_spawn(FILTER, basic_filter_locations)
 
+        defending_filter_locations = [[1, 13], [26, 13], [2, 12], [25, 12], [6, 11], [21, 11], [3, 11], [5, 11], [7, 11], [8, 11], [19, 11], [20, 11], [22, 11], [24, 11]];
+        defending_filter_locations = self.sort_positions_by_score(game_state, defending_filter_locations);
 
-        destructor_locations = [[27, 13], [0, 13],[5, 10], [22, 10], [21, 10], [6, 10], [26, 12], [1, 12],[25, 11], [2, 11], [24, 10], [3, 10], [20, 10], [7,10], [20, 9], [7,9]];
-        destructor_locations = self.sort_positions_by_score(game_state, destructor_locations);
-        if self.scored_on_locations != []:
-            destructor_locations = self.sort_positions_by_score(game_state, destructor_locations);
-        gamelib.debug_write(str(destructor_locations[0]) + str(destructor_locations[1]) + str(destructor_locations[2]));
+        destructor_locations = [[0, 13], [27, 13], [6, 10], [21, 10],[1, 12], [26, 12], [2, 11], [25, 11], [3, 10], [5, 10], [7, 10], [20, 10], [22, 10], [24, 10], [6, 9], [21, 9]];
+
+        for i in defending_filter_locations:
+            gamelib.debug_write(str(i));
+            gamelib.debug_write(str(self.nearby_destructor(game_state, i, destructor_locations)));
+            if game_state.get_resource(CORES) < 2:
+                break;
+            if self.nearby_destructor(game_state, i, destructor_locations):
+                game_state.attempt_spawn(FILTER, i);
+                game_state.attempt_upgrade(i);
+
+
+       #extra filters [[3, 11], [5, 11], [7, 11], [8, 11], [19, 11], [20, 11], [22, 11], [24, 11]]
+
+        # if not game_state.contains_stationary_unit([6,10]):
+        #     game_state.attempt_spawn(DESTRUCTOR, [5,10]);
+        # if not game_state.contains_stationary_unit([21,10]):
+        #     game_state.attempt_spawn(DESTRUCTOR, [22,10]);
         
+        
+
+
+
+        
+
+        destructor_locations = self.sort_positions_by_score(game_state, destructor_locations);
         game_state.attempt_spawn(DESTRUCTOR, destructor_locations[0:8])
 
-        # TODO Get better heuristic for when we need encryptors vs. more defense
-        if game_state.get_resource(CORES) >= 8 or self.NEED_ENCRYPTORS:         
+        for i in defending_filter_locations:
+            if game_state.get_resource(CORES) < 2:
+                break;
+            if self.nearby_destructor(game_state, i, destructor_locations):
+                game_state.attempt_spawn(FILTER, i);
+                game_state.attempt_upgrade(i);
+
+
+        if game_state.get_resource(CORES) >= 8:         
             k=game_state.attempt_spawn(ENCRYPTOR, encryptor_locations[0:min(12,1+game_state.turn_number//2)])
-            self.ENCRYPTOR_COUNT += k;
 
 
         game_state.attempt_spawn(DESTRUCTOR, destructor_locations)
 
-        #TODO Better FILTER PRIORITY LIST: for loop through all destructors and try and build/upgrade filters (1) in front of destructors
-        if game_state.turn_number > 5:
-            filter_upgrade_locations = [[5, 11], [6, 11], [21, 11], [22, 11], [6, 9], [21, 9], [3, 11], [2, 12], [1, 13], [24, 11], [25, 12],[26, 13]];
-            filter_upgrade_locations = self.sort_positions_by_score(game_state,filter_upgrade_locations);
-            game_state.attempt_upgrade(filter_upgrade_locations)
+        for i in defending_filter_locations:
+            if game_state.get_resource(CORES) < 2:
+                break;
+            if self.nearby_destructor(game_state, i, destructor_locations):
+                game_state.attempt_spawn(FILTER, i);
+                game_state.attempt_upgrade(i);
         
         #TODO decide on destructor vs encryptor upgrade order based on enemy encryptor count
 
@@ -166,9 +183,6 @@ class AlgoStrategy(gamelib.AlgoCore):
             game_state.attempt_upgrade(destructor_locations)
             game_state.attempt_upgrade(encryptor_locations)
     
-
-
-
     def least_damage_spawn_location(self, game_state, location_options):
         """
         This function will help us guess which location is the safest to spawn moving units from.
@@ -247,8 +261,6 @@ class AlgoStrategy(gamelib.AlgoCore):
             if not unit_owner_self:
                 location = breach[0];
                 self.scored_on_locations.append(location)
-
-
 
 
 if __name__ == "__main__":
